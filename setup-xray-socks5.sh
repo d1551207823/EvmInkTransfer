@@ -207,36 +207,52 @@ INBOUND
 
 # --- 生成 routing rules ---
 gen_routing_rules() {
+    # 计算规则总数，用于判断最后一条不加逗号
+    local total=0
+    [[ ${#CUSTOM_DIRECT_DOMAINS[@]} -gt 0 ]] && ((total++))   # 自定义域名
+    ((total++))                                                # geoip:private
+    total=$((total + ${#SELECTED_IPS[@]}))                     # 每个IP的入站路由
+    local idx=0
+
     # 自定义直连域名
     if [[ ${#CUSTOM_DIRECT_DOMAINS[@]} -gt 0 ]]; then
         local domains
         domains=$(printf '"%s",' "${CUSTOM_DIRECT_DOMAINS[@]}")
         domains="${domains%,}"
+        local comma=","
+        [[ $idx -eq $((total - 1)) ]] && comma=""
         cat <<RULE
       {
         "type": "field",
         "domain": [${domains}],
         "outboundTag": "direct"
-      },
+      }${comma}
 
 RULE
+        ((idx++))
     fi
 
     # 私有IP直连
+    local comma=","
+    [[ $idx -eq $((total - 1)) ]] && comma=""
     cat <<RULE
       {
         "type": "field",
         "ip": ["geoip:private"],
         "outboundTag": "direct"
-      },
+      }${comma}
 
 RULE
+    ((idx++))
 
     # 每个IP的入站→出站路由
     for i in "${!SELECTED_IPS[@]}"; do
         local ip="${SELECTED_IPS[$i]}"
         local tag="socks-${SOCKS_PORT}-${i}"
-        echo "      { \"type\": \"field\", \"inboundTag\": [\"${tag}\"], \"outboundTag\": \"out-${i}\" },"
+        local comma=","
+        [[ $idx -eq $((total - 1)) ]] && comma=""
+        echo "      { \"type\": \"field\", \"inboundTag\": [\"${tag}\"], \"outboundTag\": \"out-${i}\" }${comma}"
+        ((idx++))
     done
 }
 
